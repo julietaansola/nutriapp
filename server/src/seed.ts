@@ -16,12 +16,12 @@ async function main() {
   await prisma.user.deleteMany();
 
   // Create admin user (nutricionista)
-  const adminPassword = await bcrypt.hash('voit2025', 10);
+  const adminPassword = await bcrypt.hash('admin', 10);
   const admin = await prisma.user.create({
     data: {
-      email: 'nutri@nutriapp.com',
+      email: 'julietaansolaberreaute@gmail.com',
       password: adminPassword,
-      name: 'Nutricionista',
+      name: 'Julieta Ansola',
       role: 'ADMIN',
     },
   });
@@ -355,7 +355,7 @@ async function main() {
   console.log('✅ Turno creado');
 
   console.log('\n🎉 Seed completado!');
-  console.log('   Admin: nutri@nutriapp.com / voit2025');
+  console.log('   Admin: julietaansolaberreaute@gmail.com / admin');
   console.log('   Paciente: julieta@example.com / paciente2025');
 }
 
