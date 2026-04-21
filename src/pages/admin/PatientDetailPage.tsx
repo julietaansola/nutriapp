@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { User, Activity, UtensilsCrossed, StickyNote, Calendar } from 'lucide-react';
+import { User, Activity, UtensilsCrossed, StickyNote } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -57,9 +57,6 @@ export function PatientDetailPage() {
   };
 
   if (!patient) return <div className="text-center py-16 text-muted-foreground">Cargando...</div>;
-
-  const lastMeasurement = patient.measurements?.[0];
-  const activePlan = patient.mealPlans?.find(p => p.isActive);
 
   return (
     <div className="space-y-6">
