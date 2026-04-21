@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { User, Activity, UtensilsCrossed, StickyNote } from 'lucide-react';
+import { User, Activity, UtensilsCrossed, StickyNote, CheckCircle, AlertCircle } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { PdfUploader } from '@/components/shared/PdfUploader';
 import { EmptyState } from '@/components/shared/EmptyState';
 import * as api from '@/lib/api';
@@ -19,10 +22,17 @@ export function PatientDetailPage() {
   const [notes, setNotes] = useState('');
   const [notesTimeout, setNotesTimeout] = useState<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => {
+  // Parsed data preview states
+  const [parsedMeasurement, setParsedMeasurement] = useState<any>(null);
+  const [parsedPlan, setParsedPlan] = useState<any>(null);
+  const [saving, setSaving] = useState(false);
+
+  const loadPatient = () => {
     if (!id) return;
     api.getPatient(id).then(p => { setPatient(p); setNotes(p.notes || ''); }).catch(() => { setPatient(mockPatient); setNotes(mockPatient.notes || ''); });
-  }, [id]);
+  };
+
+  useEffect(() => { loadPatient(); }, [id]);
 
   const handleNotesChange = (value: string) => {
     setNotes(value);
@@ -37,23 +47,65 @@ export function PatientDetailPage() {
     if (!id) return;
     try {
       const result = await api.uploadMeasurementPdf(id, file);
-      console.log('Parsed measurement:', result);
-      // In production, show a dialog with parsed data for confirmation
-      alert('PDF procesado. Los datos fueron extraídos correctamente.');
+      setParsedMeasurement({ ...result.parsed, pdfUrl: result.pdfUrl });
     } catch {
-      alert('Error al procesar el PDF');
+      alert('Error al procesar el PDF. Podés cargar los datos manualmente.');
+      setParsedMeasurement({
+        measurementNumber: (patient?.measurements?.length || 0) + 1,
+        measurementDate: new Date().toISOString().split('T')[0],
+        weight: 0, height: patient?.measurements?.[0]?.height || 0,
+      });
     }
+  };
+
+  const handleSaveMeasurement = async () => {
+    if (!id || !parsedMeasurement) return;
+    setSaving(true);
+    try {
+      await api.createMeasurement(id, parsedMeasurement);
+      setParsedMeasurement(null);
+      loadPatient();
+    } catch {
+      alert('Error al guardar la medición');
+    }
+    setSaving(false);
   };
 
   const handleUploadPlan = async (file: File) => {
     if (!id) return;
     try {
       const result = await api.uploadPlanPdf(id, file);
-      console.log('Parsed plan:', result);
-      alert('PDF del plan procesado correctamente.');
+      setParsedPlan({ ...result.parsed, pdfUrl: result.pdfUrl });
     } catch {
-      alert('Error al procesar el PDF');
+      alert('Error al procesar el PDF del plan.');
     }
+  };
+
+  const handleSavePlan = async () => {
+    if (!id || !parsedPlan) return;
+    setSaving(true);
+    try {
+      await api.createMealPlan(id, {
+        planDate: new Date().toISOString(),
+        objective: parsedPlan.objective,
+        prescriptions: parsedPlan.prescriptions,
+        suggestions: parsedPlan.suggestions,
+        flexFreeMeals: parsedPlan.flexFreeMeals,
+        totalWeeklyMeals: parsedPlan.totalWeeklyMeals,
+        pdfUrl: parsedPlan.pdfUrl,
+        rawPdfText: parsedPlan.rawPdfText,
+        exchanges: parsedPlan.exchanges,
+      });
+      setParsedPlan(null);
+      loadPatient();
+    } catch {
+      alert('Error al guardar el plan');
+    }
+    setSaving(false);
+  };
+
+  const updateParsedField = (field: string, value: any) => {
+    setParsedMeasurement((prev: any) => ({ ...prev, [field]: value }));
   };
 
   if (!patient) return <div className="text-center py-16 text-muted-foreground">Cargando...</div>;
@@ -91,6 +143,103 @@ export function PatientDetailPage() {
 
         <TabsContent value="mediciones" className="mt-4 space-y-4">
           <PdfUploader onUpload={handleUploadMeasurement} label="Subir informe de composición corporal" />
+
+          {/* Preview de datos parseados */}
+          {parsedMeasurement && (
+            <Card className="border-voit-mustard/50 bg-voit-mustard/5">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 text-voit-mustard" />
+                  Datos extraídos del PDF — Revisá y confirmá
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div>
+                    <Label className="text-xs">Nº de medición</Label>
+                    <Input type="number" value={parsedMeasurement.measurementNumber || ''} onChange={e => updateParsedField('measurementNumber', parseInt(e.target.value))} />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Fecha</Label>
+                    <Input type="date" value={parsedMeasurement.measurementDate || ''} onChange={e => updateParsedField('measurementDate', e.target.value)} />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Peso (kg)</Label>
+                    <Input type="number" step="0.1" value={parsedMeasurement.weight || ''} onChange={e => updateParsedField('weight', parseFloat(e.target.value))} />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Talla (cm)</Label>
+                    <Input type="number" step="0.1" value={parsedMeasurement.height || ''} onChange={e => updateParsedField('height', parseFloat(e.target.value))} />
+                  </div>
+                </div>
+
+                {parsedMeasurement.bodyComposition && (
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground mb-2">Composición corporal</p>
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                      {Object.entries(parsedMeasurement.bodyComposition as Record<string, {kg: number | null; pct: number | null}>).map(([key, val]) => (
+                        <div key={key} className="bg-background rounded-lg p-2">
+                          <p className="text-xs text-muted-foreground capitalize">{key === 'adipose' ? 'Adiposa' : key === 'muscle' ? 'Muscular' : key === 'residual' ? 'Residual' : key === 'bone' ? 'Ósea' : 'Piel'}</p>
+                          <p className="text-sm font-medium">{val.kg ?? '-'} kg ({val.pct ?? '-'}%)</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div>
+                    <Label className="text-xs">Σ6 pliegues (mm)</Label>
+                    <Input type="number" step="0.1" value={parsedMeasurement.sumOf6Skinfolds || ''} onChange={e => updateParsedField('sumOf6Skinfolds', parseFloat(e.target.value))} />
+                  </div>
+                  <div>
+                    <Label className="text-xs">IMO</Label>
+                    <Input type="number" step="0.01" value={parsedMeasurement.muscleOseousIndex || ''} onChange={e => updateParsedField('muscleOseousIndex', parseFloat(e.target.value))} />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Metabolismo basal</Label>
+                    <Input type="number" step="0.1" value={parsedMeasurement.basalMetabolism || ''} onChange={e => updateParsedField('basalMetabolism', parseFloat(e.target.value))} />
+                  </div>
+                  <div>
+                    <Label className="text-xs">GET (kcal)</Label>
+                    <Input type="number" step="0.1" value={parsedMeasurement.totalEnergyExpenditure || ''} onChange={e => updateParsedField('totalEnergyExpenditure', parseFloat(e.target.value))} />
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <Button onClick={handleSaveMeasurement} disabled={saving} className="bg-voit-forest hover:bg-voit-forest/90 gap-1.5">
+                    <CheckCircle className="h-4 w-4" />
+                    {saving ? 'Guardando...' : 'Confirmar y guardar'}
+                  </Button>
+                  <Button variant="outline" onClick={() => setParsedMeasurement(null)}>Cancelar</Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Preview de plan parseado */}
+          {parsedPlan && (
+            <Card className="border-voit-mustard/50 bg-voit-mustard/5">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 text-voit-mustard" />
+                  Plan extraído — Revisá y confirmá
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-sm"><span className="text-muted-foreground">Objetivo:</span> <span className="font-medium">{parsedPlan.objective}</span></p>
+                <p className="text-sm"><span className="text-muted-foreground">Prescripciones:</span> {parsedPlan.prescriptions?.length || 0} momentos</p>
+                <p className="text-sm"><span className="text-muted-foreground">Intercambios:</span> {parsedPlan.exchanges?.length || 0} alimentos</p>
+                <div className="flex gap-2">
+                  <Button onClick={handleSavePlan} disabled={saving} className="bg-voit-forest hover:bg-voit-forest/90 gap-1.5">
+                    <CheckCircle className="h-4 w-4" />
+                    {saving ? 'Guardando...' : 'Confirmar y guardar'}
+                  </Button>
+                  <Button variant="outline" onClick={() => setParsedPlan(null)}>Cancelar</Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {!patient.measurements?.length ? (
             <EmptyState icon={Activity} title="Sin mediciones" description="Todavía no hay mediciones cargadas para este paciente." />
