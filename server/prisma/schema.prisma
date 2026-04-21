@@ -1,0 +1,140 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  PATIENT
+}
+
+enum Semaforo {
+  GREEN
+  YELLOW
+  RED
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String
+  role      Role
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  patient   Patient?
+}
+
+model Patient {
+  id          String           @id @default(cuid())
+  userId      String           @unique
+  user        User             @relation(fields: [userId], references: [id])
+  firstName   String
+  lastName    String
+  birthDate   DateTime?
+  phone       String?
+  email       String?
+  notes       String?          @db.Text
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  measurements    Measurement[]
+  mealPlans       MealPlan[]
+  favoriteRecipes FavoriteRecipe[]
+  appointments    Appointment[]
+}
+
+model Measurement {
+  id                    String   @id @default(cuid())
+  patientId             String
+  patient               Patient  @relation(fields: [patientId], references: [id])
+  measurementNumber     Int
+  measurementDate       DateTime
+  weight                Float
+  height                Float
+  seatedHeight          Float?
+  age                   Float?
+
+  // JSON fields for grouped measurements
+  diameters             Json?    // {biacromial, thoraxTransverse, thoraxAP, biIliocrestid, humeral, femoral, head}
+  perimeters            Json?    // {relaxedArm, flexedArm, forearm, mesoChest, minWaist, maxHips, upperThigh, medialThigh, maxCalf}
+  skinfolds             Json?    // {triceps, subscapular, supraspinal, abdominal, medialThigh, calf}
+
+  // Body composition - fraccionamiento 5 componentes
+  bodyComposition       Json?    // {adipose: {kg, pct}, muscle: {kg, pct}, residual: {kg, pct}, bone: {kg, pct}, skin: {kg, pct}}
+
+  sumOf6Skinfolds       Float?
+  muscleOseousIndex     Float?
+  basalMetabolism       Float?
+  physicalActivityLevel String?
+  totalEnergyExpenditure Float?
+  objectives            Json?    // {targetSkinfolds, adiposeDeficitKg, deficitMonths, targetIMO, muscleGainKg, surplusMonths}
+
+  pdfUrl                String?
+  rawPdfText            String?  @db.Text
+  createdAt             DateTime @default(now())
+
+  @@index([patientId])
+}
+
+model MealPlan {
+  id              String    @id @default(cuid())
+  patientId       String
+  patient         Patient   @relation(fields: [patientId], references: [id])
+  planDate        DateTime
+  objective       String
+  prescriptions   Json      // [{moment: "mañana/tarde", items: [...], examples: [...]}]
+  suggestions     String?   @db.Text
+  flexFreeMeals   Int       @default(4)
+  totalWeeklyMeals Int      @default(28)
+  pdfUrl          String?
+  rawPdfText      String?   @db.Text
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+
+  exchanges       Exchange[]
+
+  @@index([patientId])
+}
+
+model Exchange {
+  id         String    @id @default(cuid())
+  mealPlanId String
+  mealPlan   MealPlan  @relation(fields: [mealPlanId], references: [id], onDelete: Cascade)
+  category   String    // cereal, fruta, proteina_manana, proteina_almuerzo, hidrato, verdura, grasa, lacteo, practico
+  name       String
+  portion    String
+  grams      String?
+  semaforo   Semaforo  @default(GREEN)
+
+  @@index([mealPlanId])
+}
+
+model FavoriteRecipe {
+  id           String   @id @default(cuid())
+  patientId    String
+  patient      Patient  @relation(fields: [patientId], references: [id])
+  title        String
+  ingredients  String   @db.Text
+  instructions String?  @db.Text
+  mealMoment   String?
+  createdAt    DateTime @default(now())
+
+  @@index([patientId])
+}
+
+model Appointment {
+  id            String   @id @default(cuid())
+  patientId     String
+  patient       Patient  @relation(fields: [patientId], references: [id])
+  scheduledDate DateTime
+  patientNotes  String?  @db.Text
+  status        String   @default("scheduled")
+  createdAt     DateTime @default(now())
+
+  @@index([patientId])
+}
