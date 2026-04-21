@@ -5,7 +5,6 @@ databases:
     user: nutriapp
 
 services:
-  # Backend API
   - type: web
     name: nutriapp-api
     plan: free
@@ -26,20 +25,3 @@ services:
         value: production
       - key: PORT
         value: 3001
-
-  # Frontend Static Site
-  - type: static
-    name: nutriapp-frontend
-    buildCommand: npm install && npm run build
-    staticPublishPath: dist
-    headers:
-      - path: /*
-        name: Cache-Control
-        value: public, max-age=0, must-revalidate
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html
-    envVars:
-      - key: VITE_API_URL
-        value: https://nutriapp-api.onrender.com
