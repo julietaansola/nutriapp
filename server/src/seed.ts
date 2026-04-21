@@ -4,16 +4,14 @@ import bcrypt from 'bcryptjs';
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('🌱 Seeding NutriApp database...');
+  // Skip if already seeded
+  const existingAdmin = await prisma.user.findUnique({ where: { email: 'julietaansolaberreaute@gmail.com' } });
+  if (existingAdmin) {
+    console.log('✅ Database already seeded, skipping.');
+    return;
+  }
 
-  // Clean existing data
-  await prisma.exchange.deleteMany();
-  await prisma.favoriteRecipe.deleteMany();
-  await prisma.appointment.deleteMany();
-  await prisma.measurement.deleteMany();
-  await prisma.mealPlan.deleteMany();
-  await prisma.patient.deleteMany();
-  await prisma.user.deleteMany();
+  console.log('🌱 Seeding NutriApp database...');
 
   // Create admin user (nutricionista)
   const adminPassword = await bcrypt.hash('admin', 10);
